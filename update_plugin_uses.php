@@ -39,9 +39,17 @@ echo "Connection to '$db2_name' successfull\n";
 echo "\n";
 echo "____________________________________________\n\n";
 
+
+/**
+ * Count the uses of a plugin defined in $path with the calculated uses by the given $sql query
+ * The query needs to return a 'name' and a 'uses' value
+ *
+ * @param $sql
+ * @param $path
+ * @return string
+ */
 function count_uses($sql, $path) {
     $conn = $GLOBALS['conn'];
-    $conn2 = $GLOBALS['conn2'];
     $o='';
     $result = $conn->query($sql);
 
@@ -57,6 +65,13 @@ function count_uses($sql, $path) {
     return $o;
 }
 
+/**
+ * Update the number of $uses of the plugin defined by $path in the MooSIS database
+ *
+ * @param $path
+ * @param $uses
+ * @return string
+ */
 function write_uses($path, $uses) {
     $conn2 = $GLOBALS['conn2'];
     $o = '';
@@ -71,6 +86,7 @@ function write_uses($path, $uses) {
 
         if ($conn2->query($sql) === TRUE) {
             $o .= "Updated $path (" . $plugin['title'] . ") plugin with $uses uses\n";
+            $GLOBALS['updates']++;
         } else {
             $o .= "Error updating record: " . $conn2->error;
         }
@@ -78,8 +94,12 @@ function write_uses($path, $uses) {
     return $o;
 }
 
+// Preliminaries
+$updates = 0;
+$item = 0;
 
-echo "1. Updating Block Plugins\n______________________________________\n\n";
+echo ++$item . ". Updating Block Plugins\n";
+echo "____________________________________________\n\n";
 
 $sql = "
 select
@@ -95,7 +115,8 @@ order by bi.blockname
 echo count_uses($sql, 'blocks/');
 echo "\n";
 
-echo "2. Updating Module Plugins\n______________________________________\n\n";
+echo ++$item . ". Updating Module Plugins\n";
+echo "____________________________________________\n\n";
 
 $sql = "
 select
@@ -111,7 +132,8 @@ echo count_uses($sql, 'mod/');
 
 echo "\n";
 
-echo "3. Updating Course Format Plugins\n______________________________________\n\n";
+echo ++$item . ". Updating Course Format Plugins\n";
+echo "____________________________________________\n\n";
 
 $sql = "
 select 
@@ -125,7 +147,8 @@ echo count_uses($sql, 'course/format/');
 
 echo "\n";
 
-echo "4. Updating Local Plugins\n______________________________________\n\n";
+echo ++$item . ". Updating Local Plugins\n";
+echo "____________________________________________\n\n";
 
 $sql = "
 SELECT 'activitytodo' as name, count(distinct courseid) as uses 
@@ -142,7 +165,8 @@ echo count_uses($sql, 'local/');
 
 echo "\n";
 
-echo "5. Updating Plagiarism Plugins\n______________________________________\n\n";
+echo ++$item . ". Updating Plagiarism Plugins\n";
+echo "____________________________________________\n\n";
 
 $sql = "
 SELECT
@@ -155,7 +179,8 @@ echo count_uses($sql, 'plagiarism/');
 
 echo "\n";
 
-echo "6. Updating Question Types Plugins\n______________________________________\n\n";
+echo ++$item . ". Updating Question Types Plugins\n";
+echo "____________________________________________\n\n";
 
 // Get all tables for qtypes
 $sql = "
@@ -209,10 +234,13 @@ if ($result->num_rows > 0) {
     echo "Does not compute!\n";
 }
 
+echo "\n";
+echo "+++ Summary +++\n";
+echo "____________________________________________\n\n";
 
-
+echo "$updates plugins were updated.\n";
 
 $conn2->close();
 $conn->close();
-echo "\n\n------------\n\n";
+echo "____________________________________________\n\n";
 ?>
