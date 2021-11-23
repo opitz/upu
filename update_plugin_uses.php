@@ -5,7 +5,8 @@
  * Date: 19/11/21
  * Time: 15:58
  */
-echo "\n\nUPU - Update Plugin Uses v.0.2\n------------------------------\n\n";
+echo "\n\nUPU - Update Plugin Uses v.0.4.2\n";
+echo "____________________________________________\n\n";
 
 $server = '127.0.0.1';
 $db_name = 'qmulmoodleprod';
@@ -13,10 +14,11 @@ $db2_name = 'moosis';
 $db_user = 'moodle_user';
 $db_pass = 'moodle';
 
-echo "server = $server";
-echo "db_name = $db_name";
-echo "db2_name = $db2_name";
-echo "db_user = $db_user";
+echo "server = $server\n";
+echo "db_name = $db_name\n";
+echo "db2_name = $db2_name\n";
+echo "db_user = $db_user\n\n";
+echo "____________________________________________\n\n";
 
 // Create connections
 $conn = new mysqli($server, $db_user, $db_pass, $db_name);
@@ -35,12 +37,53 @@ if ($conn2->connect_error) {
 echo "Connection to '$db2_name' successfull\n";
 
 echo "\n";
+echo "____________________________________________\n\n";
+
+function count_uses($sql, $path) {
+    $conn = $GLOBALS['conn'];
+    $conn2 = $GLOBALS['conn2'];
+    $o='';
+    $result = $conn->query($sql);
+
+    if ($result->num_rows > 0) {
+        // Output data of each row
+        while($row = $result->fetch_assoc()) {
+            $o .= write_uses("$path" . $row['name'], $row['uses']);
+        }
+    } else {
+        $o = "0 results\n";
+    }
+
+    return $o;
+}
+
+function write_uses($path, $uses) {
+    $conn2 = $GLOBALS['conn2'];
+    $o = '';
+
+    $sql2 = "select * from plugins where install_path = '$path'";
+    $result2 = $conn2->query($sql2);
+    if ($result2->num_rows > 0) {
+        $plugin = $result2->fetch_assoc(); // Get the plugin data as array
+
+        // Write the changes into the database
+        $sql = "UPDATE plugins SET uses_number='" . $uses . "' WHERE id=" . $plugin['id'];
+
+        if ($conn2->query($sql) === TRUE) {
+            $o .= "Updated $path (" . $plugin['title'] . ") plugin with $uses uses\n";
+        } else {
+            $o .= "Error updating record: " . $conn2->error;
+        }
+    }
+    return $o;
+}
+
 
 echo "1. Updating Block Plugins\n______________________________________\n\n";
 
 $sql = "
 select
-bi.blockname as block, count(cx.instanceid) as uses
+bi.blockname as name, count(cx.instanceid) as uses
 from mdl_block_instances bi
 join mdl_context cx on cx.id = bi.parentcontextid
 where 1
@@ -49,34 +92,7 @@ group by bi.blockname
 order by bi.blockname
 ;";
 
-$result = $conn->query($sql);
-
-if ($result->num_rows > 0) {
-    // Output data of each row
-    while($row = $result->fetch_assoc()) {
-        $sql2 = "
-        select * from plugins where install_path = 'blocks/" . $row['block'] . "'
-        ";
-
-        $result2 = $conn2->query($sql2);
-        if ($result2->num_rows > 0) {
-            $plugin = $result2->fetch_assoc(); // Get the plugin data as array
-
-            // Write the changes into the database
-            $sql = "UPDATE plugins SET uses_number='" . $row['uses'] . "' WHERE id=" . $plugin['id'];
-
-            if ($conn2->query($sql) === TRUE) {
-                echo "Updated blocks/" . $row['block'] . " (" . $plugin['title'] . ") plugin with " . $row['uses'] . " uses\n";
-            } else {
-                echo "Error updating record: " . $conn->error;
-            }
-
-        }
-    }
-} else {
-    echo "0 results\n";
-}
-
+echo count_uses($sql, 'blocks/');
 echo "\n";
 
 echo "2. Updating Module Plugins\n______________________________________\n\n";
@@ -91,32 +107,7 @@ group by m.name
 order by m.name
 ;";
 
-$result = $conn->query($sql);
-
-if ($result->num_rows > 0) {
-    // Output data of each row
-    while($row = $result->fetch_assoc()) {
-        $sql2 = "
-        select * from plugins where install_path = 'mod/" . $row['name'] . "'
-        ";
-        $result2 = $conn2->query($sql2);
-        if ($result2->num_rows > 0) {
-            $plugin = $result2->fetch_assoc(); // Get the plugin data as array
-
-            // Write the changes into the database
-            $sql = "UPDATE plugins SET uses_number='" . $row['uses'] . "' WHERE id=" . $plugin['id'];
-
-            if ($conn2->query($sql) === TRUE) {
-                echo "Updated mod/" . $row['name'] . " (" . $plugin['title'] . ") plugin with " . $row['uses'] . " uses\n";
-            } else {
-                echo "Error updating record: " . $conn->error;
-            }
-
-        }
-    }
-} else {
-    echo "0 results\n";
-}
+echo count_uses($sql, 'mod/');
 
 echo "\n";
 
@@ -130,32 +121,94 @@ group by format
 order by format
 ;";
 
+echo count_uses($sql, 'course/format/');
+
+echo "\n";
+
+echo "4. Updating Local Plugins\n______________________________________\n\n";
+
+$sql = "
+SELECT 'activitytodo' as name, count(distinct courseid) as uses 
+FROM mdl_local_activitytodo
+;";
+echo count_uses($sql, 'local/');
+
+$sql = "
+SELECT 
+'xp' as name, count(distinct courseid) as uses
+FROM qmulmoodleprod.mdl_local_xp_config
+;";
+echo count_uses($sql, 'local/');
+
+echo "\n";
+
+echo "5. Updating Plagiarism Plugins\n______________________________________\n\n";
+
+$sql = "
+SELECT
+'turnitin' as name, count(distinct courseid) as uses
+FROM qmulmoodleprod.mdl_plagiarism_turnitin_courses
+;";
+echo count_uses($sql, 'plagiarism/');
+
+
+
+echo "\n";
+
+echo "6. Updating Question Types Plugins\n______________________________________\n\n";
+
+// Get all tables for qtypes
+$sql = "
+show tables
+where Tables_in_$db_name like '%qtype%'
+";
+
 $result = $conn->query($sql);
+$tables = [];
+$qtypes = [];
 
 if ($result->num_rows > 0) {
-    // Output data of each row
     while($row = $result->fetch_assoc()) {
-        $sql2 = "
-        select * from plugins where install_path = 'course/format/" . $row['name'] . "'
+        $tables[] = $row[array_key_first($row)];
+    }
+
+    // Get the number of courses for each question type plugin separetely
+    foreach($tables as $table) {
+        $sql2 = " 
+        select q.qtype as name, count(distinct cx.instanceid) as uses 
+        from $table qt
+        join mdl_question q on q.id = qt.questionid
+        join mdl_question_categories qc on qc.id = q.category
+        join mdl_context cx on cx.id = qc.contextid
+        where 1
+        and cx.contextlevel = 50
+        group by q.qtype
+        ;
         ";
-        $result2 = $conn2->query($sql2);
-        if ($result2->num_rows > 0) {
-            $plugin = $result2->fetch_assoc(); // Get the plugin data as array
 
-            // Write the changes into the database
-            $sql = "UPDATE plugins SET uses_number='" . $row['uses'] . "' WHERE id=" . $plugin['id'];
-
-            if ($conn2->query($sql) === TRUE) {
-                echo "Updated course/format/" . $row['name'] . " (" . $plugin['title'] . ") plugin with " . $row['uses'] . " uses\n";
+        $result2 = $conn->query($sql2);
+        if (isset($result2->num_rows) && $result2->num_rows > 0) {
+            $record = $result2->fetch_assoc();
+            if(!isset($qtypes[$record['name']])) {
+                $qtypes[$record['name']] = $record['uses'];
             } else {
-                echo "Error updating record: " . $conn->error;
+                if ($qtypes[$record['name']] < $record['uses']) {
+                    $qtypes[$record['name']] = $record['uses'];
+                }
             }
-
         }
     }
+
+    // Write the results to the MooSIS database
+    $path = "question/type/";
+    foreach ($qtypes as $name => $uses) {
+        echo write_uses($path . $name, $uses);
+    }
+
 } else {
-    echo "0 results\n";
+    echo "Does not compute!\n";
 }
+
 
 
 
